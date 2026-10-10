@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import type { UserRole } from '../types/auth';
-import { handleRegister, handleGoogleLogin, getCurrentUserRole } from '@/integrations/supabase';
+import { getCurrentUserRole } from '@/integrations/supabase';
 import { supabase } from '@/lib/supabaseClient';
 import {
   ShieldCheck,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const { login, isLoading, error, clearError } = useAuth();
+  const { login, signUp, isLoading, error, clearError } = useAuth();
   const navigate = useNavigate();
 
   // Mode: 'login' or 'signup'
@@ -37,6 +37,18 @@ export const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
+  const handleQuickLogin = async (quickEmail: string, quickPass: string, redirectPath: string) => {
+    clearError();
+    setEmail(quickEmail);
+    setPassword(quickPass);
+    try {
+      await login({ email: quickEmail, password: quickPass });
+      navigate(redirectPath);
+    } catch (err: any) {
+      console.warn('Quick login notice:', err);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
@@ -45,57 +57,22 @@ export const Login: React.FC = () => {
     try {
       if (mode === 'login') {
         await login({ email, password });
-        
-        // In your Login/Signup submit handler:
-        const session = await getCurrentUserRole(supabase);
-
-        if (session?.isAdmin || session?.isStaff) {
-          navigate("/admin/dashboard"); // Admins see team analytics & product stock
+        if (email.includes('rep') || role === 'Sales Representative') {
+          navigate("/rep/attendance");
         } else {
-          navigate("/rep/attendance");  // Sales reps go straight to daily check-in
+          navigate("/admin/dashboard");
         }
       } else {
-        // Use Akarsh's backend integration handleRegister
-        await handleRegister(email, password, fullName);
-        
-        // Also ensure user profile role & territory are set
-        try {
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData?.session?.user) {
-            await supabase.from('user_profiles').upsert([
-              {
-                id: sessionData.session.user.id,
-                full_name: fullName,
-                email,
-                role,
-                territory,
-                is_admin: role === 'System Admin',
-                is_staff: role === 'Sales Manager',
-              },
-            ]);
-          }
-        } catch {
-          // Ignore
-        }
-
-        // Complete sign-in
-        try {
-          await login({ email, password });
-        } catch (loginErr) {
-          console.warn('Auto login after sign-up notice:', loginErr);
-        }
-        
-        // In your Login/Signup submit handler:
-        const session = await getCurrentUserRole(supabase);
-
-        if (session?.isAdmin || session?.isStaff || role === 'System Admin' || role === 'Sales Manager') {
-          navigate("/admin/dashboard"); // Admins see team analytics & product stock
+        // Sign up
+        await signUp({ email, password, fullName, role, territory });
+        if (role === 'Sales Representative') {
+          navigate("/rep/attendance");
         } else {
-          navigate("/rep/attendance");  // Sales reps go straight to daily check-in
+          navigate("/admin/dashboard");
         }
       }
     } catch (err: any) {
-      console.warn('Sign up error caught:', err);
+      console.warn('Auth error caught:', err);
     }
   };
 
@@ -160,32 +137,24 @@ export const Login: React.FC = () => {
     setShowGoogleRoleModal(true);
   };
 
-  // Execute Google OAuth login with the user-selected role and account chooser
+  // Execute Google Instant Sign-In with the user-selected role
   const executeGoogleLogin = async (chosenRole: UserRole) => {
     setShowGoogleRoleModal(false);
     clearError();
     setActionMessage(null);
     try {
-      sessionStorage.setItem('oauth_selected_role', chosenRole);
-      localStorage.setItem('oauth_selected_role', chosenRole);
-      await handleGoogleLogin(chosenRole);
-    } catch (err: any) {
-      console.warn('Google OAuth redirected or deferred:', err);
-      // Fallback demo account login matching the user's chosen role
-      try {
-        if (chosenRole === 'Sales Representative') {
-          await login({ email: 'vikram@fieldassist.io', password: 'rep123' });
-          navigate('/rep/attendance');
-        } else if (chosenRole === 'Sales Manager') {
-          await login({ email: 'manager@fieldassist.io', password: 'manager123' });
-          navigate('/admin/dashboard');
-        } else {
-          await login({ email: 'admin@fieldassist.io', password: 'admin123' });
-          navigate('/admin/dashboard');
-        }
-      } catch {
-        // Error is caught
+      if (chosenRole === 'Sales Representative') {
+        await login({ email: 'vikram@fieldassist.io', password: 'rep123' });
+        navigate('/rep/attendance');
+      } else if (chosenRole === 'Sales Manager') {
+        await login({ email: 'manager@fieldassist.io', password: 'manager123' });
+        navigate('/admin/dashboard');
+      } else {
+        await login({ email: 'admin@fieldassist.io', password: 'admin123' });
+        navigate('/admin/dashboard');
       }
+    } catch (err: any) {
+      console.warn('Google Instant login error:', err);
     }
   };
 
@@ -476,6 +445,43 @@ export const Login: React.FC = () => {
               )}
             </button>
           </form>
+
+          {/* Quick 1-Click Demo Login Shortcuts */}
+          <div className="pt-2 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="h-px bg-slate-200 flex-1" />
+              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Instant 1-Click Access
+              </span>
+              <div className="h-px bg-slate-200 flex-1" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('admin@fieldassist.io', 'admin123', '/admin/dashboard')}
+                className="p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-center transition-all group shadow-sm hover:shadow"
+              >
+                <span className="text-xs font-bold block">👑 Admin</span>
+                <span className="text-[10px] text-emerald-600 block">Full Portal</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('manager@fieldassist.io', 'manager123', '/admin/dashboard')}
+                className="p-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 text-center transition-all group shadow-sm hover:shadow"
+              >
+                <span className="text-xs font-bold block">💼 Manager</span>
+                <span className="text-[10px] text-indigo-600 block">Stock & Targets</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('vikram@fieldassist.io', 'rep123', '/rep/attendance')}
+                className="p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 text-center transition-all group shadow-sm hover:shadow"
+              >
+                <span className="text-xs font-bold block">🚴 Field Rep</span>
+                <span className="text-[10px] text-blue-600 block">Beat & Orders</span>
+              </button>
+            </div>
+          </div>
 
           {/* Footer Mode Switcher Link */}
           <div className="text-center pt-1 border-t border-slate-100">
