@@ -219,26 +219,37 @@ export const authApi = {
       const { data } = await supabase.auth.getSession();
       if (data.session?.user) {
         const supaUser = data.session.user;
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', supaUser.id)
-          .single();
+        let profile: any = null;
+        try {
+          const { data: profData } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', supaUser.id)
+            .maybeSingle();
+          profile = profData;
+        } catch {
+          // Ignore profile query failure
+        }
+
+        const role: UserRole =
+          (profile?.role as UserRole) ||
+          (supaUser.user_metadata?.role as UserRole) ||
+          (supaUser.email?.toLowerCase().includes('admin') ? 'System Admin' : 'Sales Manager');
 
         return {
           id: supaUser.id,
-          name: profile?.full_name || supaUser.email?.split('@')[0] || 'Field User',
+          name: profile?.full_name || supaUser.user_metadata?.full_name || supaUser.email?.split('@')[0] || 'Field User',
           email: supaUser.email || '',
-          role: (profile?.role as UserRole) || 'Sales Manager',
-          avatar: profile?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
-          territory: profile?.territory || 'North Delhi',
+          role,
+          avatar: profile?.avatar_url || supaUser.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+          territory: profile?.territory || supaUser.user_metadata?.territory || 'North Delhi',
           region: profile?.region || 'North Zone (Delhi-NCR)',
-          department: profile?.department || 'Field Force Operations',
-          permissions: ['read:all', 'write:orders'],
+          department: profile?.department || (role === 'Sales Representative' ? 'Field Sales Force' : 'Field Sales Operations'),
+          permissions: role === 'System Admin' ? ['all'] : ['read:all', 'write:orders', 'write:visits'],
         };
       }
-    } catch {
-      // Ignore
+    } catch (e) {
+      console.warn('getCurrentUser note:', e);
     }
     return null;
   },

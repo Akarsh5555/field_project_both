@@ -32,12 +32,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data } = await supabase.auth.getSession();
         if (data.session?.user) {
           const currentUser = await api.auth.getCurrentUser();
-          if (currentUser) {
-            setUser(currentUser);
-            setToken(data.session.access_token);
-            setIsLoading(false);
-            return;
-          }
+          const userObj: User = currentUser || {
+            id: data.session.user.id,
+            name: data.session.user.user_metadata?.full_name || data.session.user.email?.split('@')[0] || 'Field User',
+            email: data.session.user.email || '',
+            role: (data.session.user.user_metadata?.role as UserRole) || 'Sales Manager',
+            avatar: data.session.user.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+            territory: data.session.user.user_metadata?.territory || 'North Delhi',
+            region: 'North Zone (Delhi-NCR)',
+            department: 'Field Sales Operations',
+            permissions: ['all', 'read:all', 'write:orders'],
+          };
+          setUser(userObj);
+          setToken(data.session.access_token);
+          localStorage.setItem('fieldassist_user_profile', JSON.stringify(userObj));
+          localStorage.setItem('fieldassist_auth_token', data.session.access_token);
+          setIsLoading(false);
+          return;
         }
 
         // Check local cached profile for demo accounts
@@ -65,13 +76,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setToken(null);
+        localStorage.removeItem('fieldassist_user_profile');
+        localStorage.removeItem('fieldassist_auth_token');
       } else if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
         try {
           const currentUser = await api.auth.getCurrentUser();
-          if (currentUser) {
-            setUser(currentUser);
-            setToken(session.access_token);
-          }
+          const userObj: User = currentUser || {
+            id: session.user.id,
+            name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Field User',
+            email: session.user.email || '',
+            role: (session.user.user_metadata?.role as UserRole) || 'Sales Manager',
+            avatar: session.user.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+            territory: session.user.user_metadata?.territory || 'North Delhi',
+            region: 'North Zone (Delhi-NCR)',
+            department: 'Field Sales Operations',
+            permissions: ['all', 'read:all', 'write:orders'],
+          };
+          setUser(userObj);
+          setToken(session.access_token);
+          localStorage.setItem('fieldassist_user_profile', JSON.stringify(userObj));
+          localStorage.setItem('fieldassist_auth_token', session.access_token);
         } catch {
           // Ignore
         }

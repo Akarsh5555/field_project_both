@@ -101,7 +101,7 @@ export const Login: React.FC = () => {
 
   // Check active session or OAuth redirect callback on mount
   useEffect(() => {
-    const checkActiveSession = async () => {
+    const handleNavigation = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
@@ -139,7 +139,18 @@ export const Login: React.FC = () => {
       }
     };
 
-    checkActiveSession();
+    handleNavigation();
+
+    // Listen to token authentication events (e.g., from email verification or Google OAuth hash fragments)
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+        handleNavigation();
+      }
+    });
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
   }, [navigate]);
 
   // Trigger Google Role Selection modal
