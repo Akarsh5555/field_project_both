@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      beat_plans: {
+        Row: {
+          id: string
+          user_id: string
+          plan_date: string
+          title: string
+          notes: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string
+          plan_date?: string
+          title?: string
+          notes?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          plan_date?: string
+          title?: string
+          notes?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      beat_plan_items: {
+        Row: {
+          id: string
+          beat_plan_id: string
+          retailer_id: string
+          sequence_order: number
+          status: string
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          beat_plan_id: string
+          retailer_id: string
+          sequence_order: number
+          status?: string
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          beat_plan_id?: string
+          retailer_id?: string
+          sequence_order?: number
+          status?: string
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       distributors: {
         Row: {
           address: string | null

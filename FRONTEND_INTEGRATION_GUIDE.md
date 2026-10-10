@@ -383,7 +383,67 @@ Returns:
 
 ---
 
-## 10. API & RPC Reference Summary
+## 10. GPS, Google Maps & Beat Planning
+
+### 10.1 Environment Variable Setup
+In your frontend `.env` file, add your Google Maps API key:
+```env
+VITE_GOOGLE_MAPS_API_KEY="YOUR_GOOGLE_MAPS_API_KEY"
+```
+
+> **Google Cloud Key Configuration:**
+> 1. In Google Cloud Console, enable **Maps JavaScript API**.
+> 2. Under Credentials, restrict your API key to **HTTP referrers**:
+>    - `http://localhost:5173/*` (for local Vite dev)
+>    - `https://your-production-domain.com/*`
+> 3. Restrict API key to only **Maps JavaScript API**.
+
+### 10.2 Browser Geolocation (No Google Key Required)
+Use the included `useGeolocation` hook:
+```typescript
+import { useGeolocation } from "@/hooks/useGeolocation";
+
+const { latitude, longitude, error, loading, getLocation } = useGeolocation();
+
+// Trigger on button click:
+<button onClick={getLocation}>📍 Get My Location</button>
+```
+
+### 10.3 Save & Load Daily Beat Plan
+```typescript
+import { saveBeatPlan, getDailyBeatPlan } from "@/integrations/supabase/beats";
+import { supabase } from "@/lib/supabaseClient";
+
+// 1. Save ordered route sequence (1: Store B, 2: Store A):
+await saveBeatPlan(supabase, {
+  planDate: "2026-10-10",
+  title: "Central Delhi Saturday Route",
+  retailerIds: ["retailer-uuid-2", "retailer-uuid-1"], // Sequenced visit order
+});
+
+// 2. Retrieve today's planned route with coordinates:
+const plan = await getDailyBeatPlan(supabase, "2026-10-10");
+console.log(plan.items); // Ordered stops with lat, lng, address, sequence_order
+```
+
+### 10.4 Updating Store Coordinates & Google Navigation
+```typescript
+import { updateRetailerCoordinates, getGoogleMapsDirectionsUrl } from "@/integrations/supabase/beats";
+
+// Pin current rep GPS as retailer's coordinates:
+await updateRetailerCoordinates(supabase, retailerId, latitude, longitude);
+
+// Generate Google Maps navigation link:
+const navUrl = getGoogleMapsDirectionsUrl(
+  { latitude: repLat, longitude: repLng },
+  { latitude: storeLat, longitude: storeLng }
+);
+window.open(navUrl, "_blank");
+```
+
+---
+
+## 11. API & RPC Reference Summary
 
 | Operation | Method / Function | PostgREST / RPC Endpoint | Auth / Roles Required |
 |---|---|---|---|
@@ -406,10 +466,14 @@ Returns:
 | Update Order Status | `supabase.rpc('update_order_status')` | `/rest/v1/rpc/update_order_status` | Staff (or Rep for cancellation) |
 | Cancel Order (Atomic) | `supabase.rpc('cancel_order_atomic')` | `/rest/v1/rpc/cancel_order_atomic` | Authenticated (Own or Staff) |
 | Dashboard Summary | `supabase.rpc('get_dashboard_summary')` | `/rest/v1/rpc/get_dashboard_summary` | Authenticated |
+| Save Beat Plan | `supabase.rpc('save_beat_plan')` | `/rest/v1/rpc/save_beat_plan` | Authenticated (Rep / Staff) |
+| Get Beat Plan | `supabase.rpc('get_daily_beat_plan')` | `/rest/v1/rpc/get_daily_beat_plan` | Authenticated (Rep / Staff) |
+| Update Store GPS | `supabase.rpc('update_retailer_location')` | `/rest/v1/rpc/update_retailer_location` | Authenticated |
 
 ---
 
-## 11. Deployment Architecture
+## 12. Deployment Architecture
+
 
 ### Backend Services (Serverless & Instant)
 - The FieldAssist backend runs fully serverless on Supabase (`baqelrnhnrsdnubasepq.supabase.co`).

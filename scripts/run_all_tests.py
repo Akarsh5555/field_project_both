@@ -13,6 +13,7 @@ TESTS = [
     ("Orders & Order History", ["python", "scripts/test_orders.py"]),
     ("Visits & Attendance", ["python", "scripts/test_visits_attendance.py"]),
     ("Dashboard Summary Analytics", ["python", "scripts/test_dashboard.py"]),
+    ("GPS & Beat Planning", ["python", "scripts/test_beat_planning.py"]),
 ]
 
 def main():
