@@ -27,14 +27,12 @@ export function BeatPlanningMap() {
   const [activeDate, setActiveDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [savingPlan, setSavingPlan] = useState(false);
   const [planMessage, setPlanMessage] = useState<string | null>(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const [leafletReady, setLeafletReady] = useState(false);
 
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const googleMapInstance = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
-  const polylineRef = useRef<any>(null);
-
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const leafletMapRef = useRef<any>(null);
+  const markersLayerRef = useRef<any>(null);
+  const polylineLayerRef = useRef<any>(null);
 
   // 1. Fetch available retailers
   useEffect(() => {
@@ -52,7 +50,7 @@ export function BeatPlanningMap() {
     loadRetailers();
   }, []);
 
-  // 2. Fetch existing beat plan for active date
+  // 2. Fetch existing beat plan for selected date
   useEffect(() => {
     async function loadPlan() {
       try {
@@ -68,6 +66,8 @@ export function BeatPlanningMap() {
             longitude: item.longitude,
           }));
           setSelectedPlanItems(orderedRetailers);
+        } else {
+          setSelectedPlanItems([]);
         }
       } catch (err) {
         console.error("Failed to load beat plan", err);
@@ -76,147 +76,153 @@ export function BeatPlanningMap() {
     loadPlan();
   }, [activeDate]);
 
-  // 3. Dynamically load Google Maps script
+  // 3. Dynamically load Leaflet (OpenStreetMap - 100% Free, No API Key Required)
   useEffect(() => {
-    if (!apiKey) return;
-
-    if ((window as any).google && (window as any).google.maps) {
-      setMapLoaded(true);
+    if ((window as any).L) {
+      setLeafletReady(true);
       return;
     }
 
-    const scriptId = "google-maps-script";
-    if (!document.getElementById(scriptId)) {
+    // Leaflet CSS
+    if (!document.getElementById("leaflet-css")) {
+      const link = document.createElement("link");
+      link.id = "leaflet-css";
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
+
+    // Leaflet JS
+    if (!document.getElementById("leaflet-js")) {
       const script = document.createElement("script");
-      script.id = scriptId;
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry`;
+      script.id = "leaflet-js";
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
       script.async = true;
-      script.defer = true;
-      script.onload = () => setMapLoaded(true);
+      script.onload = () => setLeafletReady(true);
       document.head.appendChild(script);
     }
-  }, [apiKey]);
+  }, []);
 
-  // 4. Initialize Map
+  // 4. Initialize Map Instance
   useEffect(() => {
-    if (!mapLoaded || !mapRef.current || !(window as any).google) return;
+    if (!leafletReady || !mapContainerRef.current || leafletMapRef.current) return;
+
+    const L = (window as any).L;
+    if (!L) return;
 
     const defaultCenter = userLat && userLng
-      ? { lat: userLat, lng: userLng }
-      : { lat: 28.6139, lng: 77.2090 }; // Default fallback: New Delhi
+      ? [userLat, userLng]
+      : [28.6139, 77.2090]; // Default: New Delhi
 
-    if (!googleMapInstance.current) {
-      googleMapInstance.current = new (window as any).google.maps.Map(mapRef.current, {
-        center: defaultCenter,
-        zoom: 13,
-        mapTypeControl: false,
-        streetViewControl: false,
-      });
-    }
-  }, [mapLoaded, userLat, userLng]);
+    const map = L.map(mapContainerRef.current).setView(defaultCenter, 13);
 
-  // 5. Render Markers & Planned Route Polyline on Map
+    // OpenStreetMap free tile layer
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+    markersLayerRef.current = L.layerGroup().addTo(map);
+    polylineLayerRef.current = L.layerGroup().addTo(map);
+    leafletMapRef.current = map;
+
+    return () => {
+      map.remove();
+      leafletMapRef.current = null;
+    };
+  }, [leafletReady]);
+
+  // 5. Update Map Markers & Route Polyline
   useEffect(() => {
-    if (!googleMapInstance.current || !(window as any).google) return;
+    if (!leafletMapRef.current || !leafletReady) return;
 
-    const google = (window as any).google;
+    const L = (window as any).L;
+    const map = leafletMapRef.current;
+    const markersGroup = markersLayerRef.current;
+    const polylineGroup = polylineLayerRef.current;
 
-    // Clear old markers
-    markersRef.current.forEach((m) => m.setMap(null));
-    markersRef.current = [];
+    markersGroup.clearLayers();
+    polylineGroup.clearLayers();
 
-    if (polylineRef.current) {
-      polylineRef.current.setMap(null);
-    }
+    const boundsLatLngs: any[] = [];
+    const routePoints: any[] = [];
 
-    const bounds = new google.maps.LatLngBounds();
-    let hasPoints = false;
-
-    // Sales Rep Current Location Marker
+    // Sales Rep Current Location Marker (Blue Glowing Dot)
     if (userLat && userLng) {
-      const userMarker = new google.maps.Marker({
-        position: { lat: userLat, lng: userLng },
-        map: googleMapInstance.current,
-        title: "Your Location (Sales Rep)",
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 9,
-          fillColor: "#2563eb",
-          fillOpacity: 1,
-          strokeColor: "#ffffff",
-          strokeWeight: 2,
-        },
+      const userLatLng = [userLat, userLng];
+      routePoints.push(userLatLng);
+      boundsLatLngs.push(userLatLng);
+
+      const userIcon = L.divIcon({
+        className: "custom-user-marker",
+        html: `
+          <div style="background-color: #2563eb; width: 18px; height: 18px; border-radius: 50%; border: 3px solid #ffffff; box-shadow: 0 0 8px rgba(37,99,235,0.8);"></div>
+        `,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
       });
-      markersRef.current.push(userMarker);
-      bounds.extend({ lat: userLat, lng: userLng });
-      hasPoints = true;
+
+      L.marker(userLatLng, { icon: userIcon })
+        .addTo(markersGroup)
+        .bindPopup("<strong>📍 Your Current Location (Sales Rep)</strong>");
     }
 
-    // Retailers in Selected Beat Plan (Numbered in Visit Order)
-    const routeCoords: any[] = [];
-    if (userLat && userLng) {
-      routeCoords.push({ lat: userLat, lng: userLng });
-    }
-
+    // Numbered Stops in the Planned Beat Order
     selectedPlanItems.forEach((ret, index) => {
       if (ret.latitude && ret.longitude) {
-        const pos = { lat: ret.latitude, lng: ret.longitude };
-        routeCoords.push(pos);
-        bounds.extend(pos);
-        hasPoints = true;
+        const storeLatLng = [ret.latitude, ret.longitude];
+        routePoints.push(storeLatLng);
+        boundsLatLngs.push(storeLatLng);
 
-        const marker = new google.maps.Marker({
-          position: pos,
-          map: googleMapInstance.current,
-          label: {
-            text: `${index + 1}`,
-            color: "#ffffff",
-            fontWeight: "bold",
-          },
-          title: `Stop ${index + 1}: ${ret.name}`,
-        });
-
-        const infoWindow = new google.maps.InfoWindow({
-          content: `
-            <div style="padding: 6px; font-family: sans-serif;">
-              <strong>Stop #${index + 1}: ${ret.name}</strong><br/>
-              <span style="font-size: 12px; color: #555;">${ret.address || "No address"}</span><br/>
-              <div style="margin-top: 8px;">
-                <a href="${getGoogleMapsDirectionsUrl(
-                  userLat && userLng ? { latitude: userLat, longitude: userLng } : null,
-                  { latitude: ret.latitude, longitude: ret.longitude }
-                )}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; font-weight: bold; text-decoration: underline;">
-                  Open Directions in Google Maps
-                </a>
-              </div>
+        const stopNumber = index + 1;
+        const stopIcon = L.divIcon({
+          className: "custom-stop-marker",
+          html: `
+            <div style="background-color: #ef4444; color: #ffffff; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
+              ${stopNumber}
             </div>
           `,
+          iconSize: [26, 26],
+          iconAnchor: [13, 13],
         });
 
-        marker.addListener("click", () => {
-          infoWindow.open(googleMapInstance.current, marker);
-        });
+        const directionsUrl = getGoogleMapsDirectionsUrl(
+          userLat && userLng ? { latitude: userLat, longitude: userLng } : null,
+          { latitude: ret.latitude, longitude: ret.longitude }
+        );
 
-        markersRef.current.push(marker);
+        const popupContent = `
+          <div style="font-family: sans-serif; min-width: 180px; padding: 4px;">
+            <div style="font-size: 11px; color: #ef4444; font-weight: bold;">STOP #${stopNumber}</div>
+            <strong style="font-size: 14px; color: #1f2937;">${ret.name}</strong>
+            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 8px 0;">${ret.address || "No address recorded"}</p>
+            <a href="${directionsUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: bold;">
+              🗺️ Open in Google Maps
+            </a>
+          </div>
+        `;
+
+        L.marker(storeLatLng, { icon: stopIcon })
+          .addTo(markersGroup)
+          .bindPopup(popupContent);
       }
     });
 
-    // Draw route polyline between planned stops
-    if (routeCoords.length > 1) {
-      polylineRef.current = new google.maps.Polyline({
-        path: routeCoords,
-        geodesic: true,
-        strokeColor: "#2563eb",
-        strokeOpacity: 0.8,
-        strokeWeight: 4,
-      });
-      polylineRef.current.setMap(googleMapInstance.current);
+    // Draw route polyline connecting planned stops
+    if (routePoints.length > 1) {
+      L.polyline(routePoints, {
+        color: "#2563eb",
+        weight: 4,
+        opacity: 0.8,
+        dashArray: "6, 6",
+      }).addTo(polylineGroup);
     }
 
-    if (hasPoints) {
-      googleMapInstance.current.fitBounds(bounds, { top: 50, bottom: 50, left: 50, right: 50 });
+    // Zoom and pan map to fit all points
+    if (boundsLatLngs.length > 0) {
+      map.fitBounds(L.latLngBounds(boundsLatLngs), { padding: [50, 50] });
     }
-  }, [selectedPlanItems, userLat, userLng, mapLoaded]);
+  }, [selectedPlanItems, userLat, userLng, leafletReady]);
 
   // Reorder functions
   const moveUp = (index: number) => {
@@ -277,7 +283,7 @@ export function BeatPlanningMap() {
       setSelectedPlanItems((prev) =>
         prev.map((r) => (r.id === retailerId ? { ...r, latitude: userLat, longitude: userLng } : r))
       );
-      alert("Store coordinates updated to your current location!");
+      alert("Store coordinates pinned to your current GPS position!");
     } catch (err: any) {
       alert(`Error updating location: ${err.message}`);
     }
@@ -288,8 +294,8 @@ export function BeatPlanningMap() {
       {/* 1. Header & GPS Section */}
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-800">Beat Planning & GPS Route</h2>
-          <p className="text-sm text-gray-500">Plan daily store visits and navigate via Google Maps</p>
+          <h2 className="text-xl font-bold text-gray-800">Beat Planning & Route Map</h2>
+          <p className="text-sm text-gray-500">Plan daily store visits with free interactive map & Google navigation</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -342,7 +348,7 @@ export function BeatPlanningMap() {
           )}
 
           {/* Planned Sequence List */}
-          <div className="flex-1 overflow-y-auto max-h-96 flex flex-col gap-2">
+          <div className="flex-1 overflow-y-auto max-h-80 flex flex-col gap-2">
             {selectedPlanItems.length === 0 ? (
               <p className="text-sm text-gray-400 py-6 text-center">
                 No stores in today's beat plan.<br />Select stores below to add them to your route.
@@ -354,7 +360,7 @@ export function BeatPlanningMap() {
                   className="flex items-center justify-between p-2.5 bg-gray-50 border border-gray-200 rounded-md text-sm"
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
-                    <span className="w-6 h-6 flex-shrink-0 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xs">
+                    <span className="w-6 h-6 flex-shrink-0 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs">
                       {idx + 1}
                     </span>
                     <div className="truncate">
@@ -391,8 +397,8 @@ export function BeatPlanningMap() {
                         )}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-2 py-1 bg-gray-100 hover:bg-gray-200 border rounded text-xs font-medium text-blue-600"
-                        title="Directions"
+                        className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded text-xs font-medium"
+                        title="Open in Google Maps"
                       >
                         ↗
                       </a>
@@ -438,7 +444,7 @@ export function BeatPlanningMap() {
                         <button
                           onClick={() => handleSetCurrentLocationForRetailer(r.id)}
                           className="px-2 py-1 text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded"
-                          title="Set current GPS as store coordinates"
+                          title="Pin current GPS as store coordinates"
                         >
                           Pin GPS
                         </button>
@@ -456,19 +462,13 @@ export function BeatPlanningMap() {
           </div>
         </div>
 
-        {/* Right Column: Google Map Container */}
+        {/* Right Column: 100% Free OpenStreetMap Container */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-[500px]">
-          {!apiKey ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-gray-50">
-              <div className="text-4xl mb-2">🗺️</div>
-              <h4 className="font-semibold text-gray-800">Google Maps API Key Required</h4>
-              <p className="text-sm text-gray-500 max-w-md mt-1">
-                Please set <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono">VITE_GOOGLE_MAPS_API_KEY</code> in your frontend <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono">.env</code> file to render the interactive map.
-              </p>
-            </div>
-          ) : (
-            <div ref={mapRef} className="w-full flex-1 min-h-[500px]" />
-          )}
+          <div className="p-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-500 flex items-center justify-between">
+            <span>🗺️ <strong>Free OpenStreetMap</strong> (Zero API Key, No Billing Required)</span>
+            <span className="text-blue-600">Click any stop to open Google Maps navigation</span>
+          </div>
+          <div ref={mapContainerRef} className="w-full flex-1 min-h-[480px]" style={{ minHeight: "480px" }} />
         </div>
       </div>
     </div>
