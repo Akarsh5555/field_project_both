@@ -79,19 +79,23 @@ export const Login: React.FC = () => {
         }
 
         // Complete sign-in
-        await login({ email, password });
+        try {
+          await login({ email, password });
+        } catch (loginErr) {
+          console.warn('Auto login after sign-up notice:', loginErr);
+        }
         
         // In your Login/Signup submit handler:
         const session = await getCurrentUserRole(supabase);
 
-        if (session?.isAdmin || session?.isStaff) {
+        if (session?.isAdmin || session?.isStaff || role === 'System Admin' || role === 'Sales Manager') {
           navigate("/admin/dashboard"); // Admins see team analytics & product stock
         } else {
           navigate("/rep/attendance");  // Sales reps go straight to daily check-in
         }
       }
     } catch (err: any) {
-      // Error handled by AuthContext
+      console.warn('Sign up error caught:', err);
     }
   };
 
