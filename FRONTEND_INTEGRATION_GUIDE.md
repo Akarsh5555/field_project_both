@@ -37,7 +37,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 ## 3. Authentication & Roles
 
-### 3.1 Sign In
+### 3.1 Sign In (Email & Password)
 ```typescript
 import { supabase } from "@/lib/supabaseClient";
 
@@ -51,7 +51,43 @@ export async function login(email: string, password: string) {
 }
 ```
 
-### 3.2 Get Current User & Role
+### 3.2 Create Account / Sign Up (Email & Password)
+```typescript
+export async function register(email: string, password: string, fullName: string) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+      },
+    },
+  });
+  if (error) throw error;
+  return data;
+}
+```
+
+### 3.3 Sign In / Sign Up with Google (Gmail)
+```typescript
+export async function loginWithGoogle() {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+      queryParams: {
+        access_type: "offline",
+        prompt: "consent",
+      },
+    },
+  });
+  if (error) throw error;
+  return data;
+}
+```
+
+
+### 3.4 Get Current User & Role
 ```typescript
 export async function getCurrentUserRole() {
   const { data: { user } } = await supabase.auth.getUser();
@@ -70,7 +106,7 @@ export async function getCurrentUserRole() {
 }
 ```
 
-### 3.3 Role-Based UI Routing
+### 3.5 Role-Based UI Routing
 ```typescript
 // Example: in your App.tsx or ProtectedRoute
 const userSession = await getCurrentUserRole();
@@ -84,14 +120,26 @@ if (!userSession) {
 }
 ```
 
-### 3.4 Sign Out
+### 3.6 Sign Out
 ```typescript
 export async function logout() {
   await supabase.auth.signOut();
 }
 ```
 
+### 3.7 Enabling Google Sign-In in Supabase (1-time setup)
+To allow users to sign in with their Google/Gmail account:
+1. Go to **Google Cloud Console** ([console.cloud.google.com](https://console.cloud.google.com/apis/credentials)) ➔ Create an **OAuth 2.0 Client ID** (Web application).
+2. Set Authorized redirect URI to:
+   `https://baqelrnhnrsdnubasepq.supabase.co/auth/v1/callback`
+3. In your **Supabase Dashboard** ➔ **Authentication** ➔ **Providers** ➔ **Google**:
+   - Toggle **Enable Google provider** to ON.
+   - Paste your **Client ID** and **Client Secret**.
+   - Click **Save**.
+*(All new users signing in via Google automatically get their profile created and default to the `sales_rep` role!)*
+
 ---
+
 
 
 ## 4. Attendance Screen (Check-in & Check-out)
