@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import {
   ShieldCheck,
   ChevronDown,
@@ -8,13 +7,11 @@ import {
   MapPin,
   TrendingUp,
   Store,
-  LayoutDashboard,
   ArrowRight
 } from 'lucide-react';
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     // If URL has access_token in hash (from Supabase Auth redirect), navigate to dashboard
@@ -95,19 +92,12 @@ export const LandingPage: React.FC = () => {
             <ChevronDown className="w-3.5 h-3.5" />
           </div>
 
-          {/* Header Login / Dashboard Button */}
+          {/* Header Login Button */}
           <button
-            onClick={() => navigate(isAuthenticated ? '/dashboard' : '/login')}
-            className="px-5 py-2 lg:px-6 lg:py-2.5 rounded-full bg-white text-[#0a1e3f] hover:bg-slate-100 text-xs lg:text-sm font-semibold shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 active:translate-y-0 min-h-[40px] flex items-center gap-1.5"
+            onClick={() => navigate('/login')}
+            className="px-6 py-2.5 rounded-full bg-white text-[#0a1e3f] hover:bg-slate-100 text-xs lg:text-sm font-bold shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 active:translate-y-0 min-h-[40px] flex items-center gap-1.5"
           >
-            {isAuthenticated ? (
-              <>
-                <LayoutDashboard className="w-4 h-4 text-brand-600" />
-                <span>Go to Dashboard</span>
-              </>
-            ) : (
-              <span>Login</span>
-            )}
+            <span>Login</span>
           </button>
         </nav>
       </header>
@@ -151,20 +141,12 @@ export const LandingPage: React.FC = () => {
 
             <div className="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
               <button
-                onClick={() => navigate(isAuthenticated ? '/dashboard' : '/login')}
-                className="w-full sm:w-auto px-7 py-3.5 rounded-full bg-gradient-to-r from-brand-500 to-indigo-600 hover:from-brand-400 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-brand-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
+                onClick={() => navigate('/login')}
+                className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-gradient-to-r from-brand-500 to-indigo-600 hover:from-brand-400 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-brand-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
               >
-                <span>{isAuthenticated ? 'Open FieldAssist Portal' : 'Get Started Now'}</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>Login</span>
+                <ArrowRight className="w-4 h-4 ml-1" />
               </button>
-              {!isAuthenticated && (
-                <button
-                  onClick={() => navigate('/login')}
-                  className="w-full sm:w-auto px-6 py-3.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-sm transition-all"
-                >
-                  Demo Accounts
-                </button>
-              )}
             </div>
           </div>
         </div>
