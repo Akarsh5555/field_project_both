@@ -7,24 +7,11 @@ echo.
 cd /d "%~dp0"
 set "PATH=%PATH%;C:\Users\bakar\AppData\Local\MinGit\cmd"
 
-echo Current Git Remote:
-git remote -v
-echo.
-echo If you created a new GitHub repository (e.g. https://github.com/Akarsh5555/fieldassist.git):
-set /p REPO_URL="Enter new GitHub repo URL (or press Enter to keep current): "
-if not "%REPO_URL%"=="" (
-    git remote remove origin 2>nul
-    git remote add origin %REPO_URL%
-    echo Remote 'origin' updated to: %REPO_URL%
-)
-
-echo.
-echo Pushing code to GitHub...
-echo If a GitHub browser window opens, click "Sign in with your browser" / "Authorize".
+echo Repository: https://github.com/Akarsh5555/field_project_both
+echo Branch: main
 echo.
 
-git branch -M main
-git push -u origin main
+git push origin main
 
 echo.
 echo ========================================================
